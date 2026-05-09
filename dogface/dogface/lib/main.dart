@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ionicons/ionicons.dart';
 
 // ==================== PUNTO DE ENTRADA ====================
 void main() => runApp(const MiApp());
@@ -58,8 +57,8 @@ class _EstadoPaginaLogin extends State<PaginaLogin> {
       );
 
       final datos = jsonDecode(respuesta.body);
-      print(datos);
-      if (respuesta.statusCode == 200 && datos['ok'] == true) {
+
+      if (respuesta.statusCode == 200 && datos['success'] == true) {
         await _guardarToken(datos['token']);
         _navegarAPaginaPrincipal();
       } else {
@@ -222,6 +221,12 @@ class _EstadoPaginaPrincipal extends State<PaginaPrincipal> {
   Map<String, dynamic>? reaccionSeleccionada;
   bool mostrarReacciones = false;
 
+  final List<String> imagenesPublicacion = [
+    'https://picsum.photos/600/400?random=1',
+    'https://picsum.photos/600/400?random=2',
+    'https://picsum.photos/600/400?random=3',
+  ];
+
   static const List<Map<String, dynamic>> catalogoReacciones = [
     {'icon': Icons.thumb_up, 'color': Colors.blue, 'label': 'Me gusta'},
     {'icon': Icons.favorite, 'color': Colors.red, 'label': 'Me encanta'},
@@ -283,6 +288,117 @@ class _EstadoPaginaPrincipal extends State<PaginaPrincipal> {
           ],
         ),
       ),
+    );
+  }
+
+  final ScrollController _controladorGaleria = ScrollController();
+
+  @override
+  void dispose() {
+    _controladorGaleria.dispose();
+    super.dispose();
+  }
+
+  Widget _construirGaleriaImagenes(List<String> urls) {
+    if (urls.isEmpty) {
+      return const SizedBox(
+        height: 250,
+        child: Center(child: Icon(Icons.image, size: 60, color: Colors.grey)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 250,
+          child: Scrollbar(
+            controller: _controladorGaleria,
+            thumbVisibility: true, 
+            child: ListView.builder(
+              controller: _controladorGaleria,
+              scrollDirection: Axis.horizontal,
+              itemCount: urls.length,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemBuilder: (context, index) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: MediaQuery.of(context).size.width - 32,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          urls[index],
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              color: Colors.grey[300],
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[300],
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (index == 0 && urls.length > 1)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${urls.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (urls.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Text(
+              'Desliza o usa la barra lateral para ver más (${urls.length} fotos)',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -404,7 +520,7 @@ class _EstadoPaginaPrincipal extends State<PaginaPrincipal> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _construirCabeceraPublicacion(),
-          _construirImagenPublicacion(),
+          _construirGaleriaImagenes(imagenesPublicacion),
           if (reaccionSeleccionada != null) _construirBannerReaccion(),
           _construirBarraAcciones(),
           _construirTextoPublicacion(),

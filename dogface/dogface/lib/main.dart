@@ -221,11 +221,35 @@ class _EstadoPaginaPrincipal extends State<PaginaPrincipal> {
   Map<String, dynamic>? reaccionSeleccionada;
   bool mostrarReacciones = false;
 
-  final List<String> imagenesPublicacion = [
-    'https://picsum.photos/600/400?random=1',
-    'https://picsum.photos/600/400?random=2',
-    'https://picsum.photos/600/400?random=3',
-  ];
+  // Imágenes cargadas desde el backend (solo animales validados)
+  List<String> imagenesPublicacion = [];
+  bool cargandoImagenes = true;
+
+  static const String _urlImagenesPost = 'http://127.0.0.1:3000/publicaciones/1/imagenes';
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarImagenesPublicacion();
+  }
+
+  Future<void> _cargarImagenesPublicacion() async {
+    try {
+      final respuesta = await http.get(Uri.parse(_urlImagenesPost));
+      if (respuesta.statusCode == 200) {
+        final datos = jsonDecode(respuesta.body);
+        if (datos['ok'] == true && datos['imagenes'] != null) {
+          setState(() {
+            imagenesPublicacion = List<String>.from(datos['imagenes']);
+          });
+        }
+      }
+    } catch (_) {
+      // Si falla la conexión, la galería queda vacía
+    } finally {
+      setState(() => cargandoImagenes = false);
+    }
+  }
 
   static const List<Map<String, dynamic>> catalogoReacciones = [
     {'icon': Icons.thumb_up, 'color': Colors.blue, 'label': 'Me gusta'},
@@ -300,6 +324,14 @@ class _EstadoPaginaPrincipal extends State<PaginaPrincipal> {
   }
 
   Widget _construirGaleriaImagenes(List<String> urls) {
+    if (cargandoImagenes) {
+      return const SizedBox(
+        height: 250,
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFF667eea)),
+        ),
+      );
+    }
     if (urls.isEmpty) {
       return const SizedBox(
         height: 250,

@@ -1,42 +1,90 @@
-const { createClient } = require('@supabase/supabase-js');
+const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error("No estan configuradas las variables de entorno");
-    process.exit(1);
-}
-const supabase = createClient(supabaseUrl, supabaseKey);
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: parseInt(process.env.DB_PORT || '3306', 10),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
 async function testConnection() {
-    try {
-        const { data, error, count } = await supabase.from('mascotas').select('*', { count: 'exact', head: true });
-        if (error) {
-            if (error.code === 'PGRST116') {
-                console.error("La tabla mascotas esta vacia o no tengo permisos");
-                return { ok: false, message: 'La tabla mascotas esta vacia o no tengo permisos' }
-            }
-            throw error;
-        }
-    console.log("Sin error");
-    console.log(count);    
-    return { ok: true, message: 'Conexion exitosa y se tienen:', count};
-    } catch(e){
-        console.error(e);
-        return { ok: false, message: 'Error al conectar con la base de datos' }
-    }
+  try {
+    const [[{ count }]] = await pool.query('SELECT COUNT(*) AS count FROM mascotas');
+    console.log('Sin error');
+    console.log(count);
+    return { ok: true, message: 'Conexion exitosa y se tienen:', count };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: 'Error al conectar con la base de datos' };
+  }
 }
 
 async function insertaMascota(datos) {
-    const {data, error} = await supabase.from("mascotas").insert(datos).select();
-    if (error) {
-        console.error(error);
-        return { ok: false, message: "Error al insertar la mascota" };
-    } else {
-        return { ok: true, message: "Mascota insertada correctamente", data: data[0] };
-    }
+  const camposPermitidos = ['nombre', 'especie', 'raza', 'edad', 'dueno_id', 'descripcion', 'foto_url'];
+  const campos = Object.keys(datos).filter((c) => camposPermitidos.includes(c));
+
+  if (campos.length === 0) {
+    return { ok: false, message: 'No se proporcionaron datos válidos' };
+  }
+
+  const columnas = campos.map((c) => `\`${c}\``).join(', ');
+  const placeholders = campos.map(() => '?').join(', ');
+  const valores = campos.map((c) => datos[c]);
+
+  try {
+    const [result] = await pool.query(
+      `INSERT INTO mascotas (${columnas}) VALUES (${placeholders})`,
+      valores
+    );
+    const [[mascota]] = await pool.query('SELECT * FROM mascotas WHERE id = ?', [result.insertId]);
+    return { ok: true, message: 'Mascota insertada correctamente', data: mascota };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: 'Error al insertar la mascota' };
+  }
 }
 
-module.exports = {supabase,testConnection,insertaMascota};
+async function getMascotaById(id) {
+  try {
+    const [rows] = await pool.query('SELECT * FROM mascotas WHERE id = ?', [id]);
+    return { ok: true, data: rows };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: 'Error al conectar con la base de datos' };
+  }
+}
+
+async function createUsuario({ dueno_id, email, password_hash }) {
+  try {
+    const ahora = new Date();
+    const [result] = await pool.query(
+      'INSERT INTO usuarios (dueno_id, email, password_hash, activo, ultimo_login, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [dueno_id, email, password_hash, true, ahora, ahora]
+    );
+    const [[usuario]] = await pool.query(
+      'SELECT id, dueno_id, email, activo, ultimo_login FROM usuarios WHERE id = ?',
+      [result.insertId]
+    );
+    return { ok: true, data: usuario };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: e.message };
+  }
+}
+
+async function getUsuarioByEmail(email) {
+  try {
+    const [rows] = await pool.query('SELECT * FROM usuarios WHERE email = ?', [email]);
+    return { ok: true, data: rows[0] || null };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: e.message };
+  }
+}
+
+module.exports = { pool, testConnection, insertaMascota, getMascotaById, createUsuario, getUsuarioByEmail };

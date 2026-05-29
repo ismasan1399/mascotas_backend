@@ -1,2 +1,17 @@
-backend/.env
-backend/node_modules/
+# Node
+node_modules/
+.env
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.g.dart
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
